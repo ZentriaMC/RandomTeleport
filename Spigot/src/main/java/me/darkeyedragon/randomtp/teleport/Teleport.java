@@ -142,6 +142,7 @@ public class Teleport {
             if (configHandler.getSectionTeleport().getDeathTimer() > 0) {
                 addToDeathTimer(player);
             }
+            player.setFallDistance(0.0F);
             if (property.isUseEco() && EcoFactory.isUseEco()) {
                 ecoHandler.makePayment(player, configHandler.getSectionEconomy().getPrice());
                 MessageUtil.sendMessage(plugin, player, configHandler.getSectionMessage().getSubSectionEconomy().getPayment());
