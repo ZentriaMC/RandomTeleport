@@ -109,23 +109,36 @@ public class Teleport {
     }
 
     private void teleport() {
-        RandomLocation randomLocation = plugin.getWorldQueue().popLocation(property.getWorld());
+        final RandomLocation randomLocation = plugin.getWorldQueue().popLocation(property.getWorld());
         if (randomLocation == null) {
             MessageUtil.sendMessage(plugin, property.getCommandSender(), configHandler.getSectionMessage().getDepletedQueue());
             return;
         }
         Location location = LocationUtil.toLocation(randomLocation);
-        PaperLib.getChunkAtAsync(location).thenAccept(chunk -> {
+        PaperLib.getChunkAtAsync(location).thenApply(chunk -> {
             LocationSearcher baseLocationSearcher = LocationSearcherFactory.getLocationSearcher(property.getWorld(), plugin);
             if (!baseLocationSearcher.isSafe(randomLocation)) {
+                // TODO: this sucks
                 random();
-                return;
+                return null;
             }
+
+            return chunk;
+        }).thenCompose(chunk -> {
+            if (chunk == null) {
+                return null;
+            }
+
             Block block = chunk.getWorld().getBlockAt(LocationUtil.toLocation(randomLocation));
             Location loc = block.getLocation().add(0.5, 1.5, 0.5);
             plugin.getCooldowns().put(player.getUniqueId(), System.currentTimeMillis());
             drawWarpParticles(player);
-            PaperLib.teleportAsync(player, loc);
+            return PaperLib.teleportAsync(player, loc);
+        }).thenAccept(teleportSuccess -> {
+            if (teleportSuccess != Boolean.FALSE) {
+                return;
+            }
+
             if (configHandler.getSectionTeleport().getDeathTimer() > 0) {
                 addToDeathTimer(player);
             }
