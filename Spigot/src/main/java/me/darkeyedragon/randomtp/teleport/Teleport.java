@@ -19,10 +19,12 @@ import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.util.Vector;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Teleport {
+    private static final Vector NULL_VECTOR = new Vector(0, 0, 0);
 
     private final RandomTeleport plugin;
     private final TeleportProperty property;
@@ -130,7 +132,7 @@ public class Teleport {
             }
 
             Block block = chunk.getWorld().getBlockAt(LocationUtil.toLocation(randomLocation));
-            Location loc = block.getLocation().add(0.5, 1.5, 0.5);
+            Location loc = block.getLocation().add(0.5, 2.0, 0.5);
             plugin.getCooldowns().put(player.getUniqueId(), System.currentTimeMillis());
             drawWarpParticles(player);
             return PaperLib.teleportAsync(player, loc);
@@ -143,6 +145,7 @@ public class Teleport {
                 addToDeathTimer(player);
             }
             player.setFallDistance(0.0F);
+            player.setVelocity(NULL_VECTOR);
             if (property.isUseEco() && EcoFactory.isUseEco()) {
                 ecoHandler.makePayment(player, configHandler.getSectionEconomy().getPrice());
                 MessageUtil.sendMessage(plugin, player, configHandler.getSectionMessage().getSubSectionEconomy().getPayment());
