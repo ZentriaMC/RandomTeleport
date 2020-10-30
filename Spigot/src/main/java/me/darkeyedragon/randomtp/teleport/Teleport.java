@@ -135,6 +135,8 @@ public class Teleport {
             Location loc = block.getLocation().add(0.5, 2.0, 0.5);
             plugin.getCooldowns().put(player.getUniqueId(), System.currentTimeMillis());
             drawWarpParticles(player);
+            player.setFallDistance(0.0F);
+            player.setVelocity(NULL_VECTOR);
             return PaperLib.teleportAsync(player, loc);
         }).thenAccept(teleportSuccess -> {
             if (teleportSuccess != Boolean.FALSE) {
@@ -144,8 +146,6 @@ public class Teleport {
             if (configHandler.getSectionTeleport().getDeathTimer() > 0) {
                 addToDeathTimer(player);
             }
-            player.setFallDistance(0.0F);
-            player.setVelocity(NULL_VECTOR);
             if (property.isUseEco() && EcoFactory.isUseEco()) {
                 ecoHandler.makePayment(player, configHandler.getSectionEconomy().getPrice());
                 MessageUtil.sendMessage(plugin, player, configHandler.getSectionMessage().getSubSectionEconomy().getPayment());
