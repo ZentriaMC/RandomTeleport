@@ -1,5 +1,6 @@
 package me.darkeyedragon.randomtp;
 
+import eu.mikroskeem.zentria.randomteleport.ServerExecutor;
 import eu.mikroskeem.zentria.randomteleport.api.RandomTeleportAPI;
 import me.darkeyedragon.randomtp.api.world.RandomWorld;
 import me.darkeyedragon.randomtp.api.world.location.RandomLocation;
@@ -43,5 +44,10 @@ public class SpigotImpl extends JavaPlugin implements RandomTeleportAPI {
     @Override
     public CompletableFuture<RandomLocation> getValidRandomLocation(RandomWorld world) {
         return Teleport.calculateRandomLocation(this.getInstance(), world, true);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> checkRandomLocationSafety(RandomLocation randomLocation) {
+        return CompletableFuture.supplyAsync(() -> Teleport.checkLocationSafety(this.getInstance(), randomLocation), ServerExecutor.INSTANCE);
     }
 }

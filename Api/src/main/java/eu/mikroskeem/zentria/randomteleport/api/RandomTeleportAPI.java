@@ -11,4 +11,6 @@ public interface RandomTeleportAPI {
     RandomWorld getWorld(String name);
 
     CompletableFuture<RandomLocation> getValidRandomLocation(RandomWorld world);
+
+    CompletableFuture<Boolean> checkRandomLocationSafety(RandomLocation randomLocation);
 }
