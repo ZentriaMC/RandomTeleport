@@ -10,7 +10,11 @@ public interface LocationSearcher {
 
     CompletableFuture<RandomLocation> getRandom(SectionWorldDetail sectionWorldDetail);
 
-    boolean isSafe(RandomLocation location);
+    default boolean isSafe(RandomLocation location) {
+        return isSafe(location, false);
+    }
+
+    boolean isSafe(RandomLocation location, boolean lenient);
 
     boolean isSafeForPlugins(RandomLocation location);
 }

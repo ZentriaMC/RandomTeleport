@@ -47,7 +47,7 @@ public class SpigotImpl extends JavaPlugin implements RandomTeleportAPI {
     }
 
     @Override
-    public CompletableFuture<Boolean> checkRandomLocationSafety(RandomLocation randomLocation) {
-        return CompletableFuture.supplyAsync(() -> Teleport.checkLocationSafety(this.getInstance(), randomLocation), ServerExecutor.INSTANCE);
+    public CompletableFuture<Boolean> checkRandomLocationSafety(RandomLocation randomLocation, boolean lenient) {
+        return CompletableFuture.supplyAsync(() -> Teleport.checkLocationSafety(this.getInstance(), randomLocation, lenient), ServerExecutor.INSTANCE);
     }
 }

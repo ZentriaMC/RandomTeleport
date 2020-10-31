@@ -89,7 +89,7 @@ public abstract class BaseLocationSearcher implements LocationSearcher {
     }
 
     @Override
-    public boolean isSafe(RandomLocation loc) {
+    public boolean isSafe(RandomLocation loc, boolean lenient) {
         RandomWorld world = loc.getWorld();
         if (world == null) return false;
         RandomBlock block = loc.getBlock();
@@ -105,7 +105,7 @@ public abstract class BaseLocationSearcher implements LocationSearcher {
         if (block.isLiquid()) return false;
         if (!isSafeAbove(loc)) return false;
         if (!isSafeForPlugins(loc)) return false;
-        return isSafeSurrounding(loc);
+        return lenient || isSafeSurrounding(loc);
     }
 
     @Override

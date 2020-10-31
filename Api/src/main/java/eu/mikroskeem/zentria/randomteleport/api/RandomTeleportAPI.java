@@ -12,5 +12,9 @@ public interface RandomTeleportAPI {
 
     CompletableFuture<RandomLocation> getValidRandomLocation(RandomWorld world);
 
-    CompletableFuture<Boolean> checkRandomLocationSafety(RandomLocation randomLocation);
+    default CompletableFuture<Boolean> checkRandomLocationSafety(RandomLocation randomLocation) {
+        return checkRandomLocationSafety(randomLocation, false);
+    }
+
+    CompletableFuture<Boolean> checkRandomLocationSafety(RandomLocation randomLocation, boolean lenient);
 }

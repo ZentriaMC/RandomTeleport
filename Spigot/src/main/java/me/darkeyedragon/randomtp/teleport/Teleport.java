@@ -200,7 +200,7 @@ public class Teleport {
         }
 
         return PaperLib.getChunkAtAsync(LocationUtil.toLocation(randomLocation)).thenCompose(chunk -> {
-            if (!checkLocationSafety(plugin, randomLocation)) {
+            if (!checkLocationSafety(plugin, randomLocation, false)) {
                 // Try again
                 return calculateRandomLocation(plugin, world, waitIfDepleted);
             }
@@ -220,9 +220,9 @@ public class Teleport {
         return CompletableFuture.completedFuture(null);
     }
 
-    public static boolean checkLocationSafety(RandomTeleport plugin, RandomLocation randomLocation) {
+    public static boolean checkLocationSafety(RandomTeleport plugin, RandomLocation randomLocation, boolean lenient) {
         LocationSearcher baseLocationSearcher = LocationSearcherFactory.getLocationSearcher(randomLocation.getWorld(), plugin);
-        return baseLocationSearcher.isSafe(randomLocation);
+        return baseLocationSearcher.isSafe(randomLocation, lenient);
     }
 }
 
