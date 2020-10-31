@@ -1,25 +1,32 @@
 package me.darkeyedragon.randomtp.teleport;
 
+import eu.mikroskeem.zentria.randomteleport.api.exception.QueueDepletedException;
 import io.papermc.lib.PaperLib;
 import me.darkeyedragon.randomtp.RandomTeleport;
 import me.darkeyedragon.randomtp.SpigotImpl;
+import me.darkeyedragon.randomtp.api.queue.LocationQueue;
+import me.darkeyedragon.randomtp.api.queue.QueueListener;
+import me.darkeyedragon.randomtp.api.world.RandomWorld;
 import me.darkeyedragon.randomtp.api.world.location.RandomLocation;
 import me.darkeyedragon.randomtp.api.world.location.search.LocationSearcher;
 import me.darkeyedragon.randomtp.common.eco.EcoHandler;
+import me.darkeyedragon.randomtp.common.world.WorldConfigSection;
+import me.darkeyedragon.randomtp.common.world.location.search.LocationSearcherFactory;
 import me.darkeyedragon.randomtp.config.BukkitConfigHandler;
 import me.darkeyedragon.randomtp.failsafe.DeathTracker;
 import me.darkeyedragon.randomtp.util.MessageUtil;
 import me.darkeyedragon.randomtp.util.location.LocationUtil;
-import me.darkeyedragon.randomtp.common.world.WorldConfigSection;
-import me.darkeyedragon.randomtp.common.world.location.search.LocationSearcherFactory;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
 import org.bukkit.util.Vector;
 
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Teleport {
@@ -111,25 +118,26 @@ public class Teleport {
     }
 
     private void teleport() {
-        final RandomLocation randomLocation = plugin.getWorldQueue().popLocation(property.getWorld());
-        if (randomLocation == null) {
-            MessageUtil.sendMessage(plugin, property.getCommandSender(), bukkitConfigHandler.getSectionMessage().getDepletedQueue());
-            return;
-        }
-        Location location = LocationUtil.toLocation(randomLocation);
-        PaperLib.getChunkAtAsync(location).thenApply(chunk -> {
+        calculateRandomLocation(plugin, property.getWorld(), false).thenCompose(randomLocation -> {
+            return PaperLib.getChunkAtAsync(LocationUtil.toLocation(randomLocation)).thenApply(chunk -> {
+                return Map.entry(randomLocation, chunk);
+            });
+        }).thenApply(locationChunkEntry -> {
             LocationSearcher baseLocationSearcher = LocationSearcherFactory.getLocationSearcher(property.getWorld(), plugin);
-            if (!baseLocationSearcher.isSafe(randomLocation)) {
+            if (!baseLocationSearcher.isSafe(locationChunkEntry.getKey())) {
                 // TODO: this sucks
                 random();
                 return null;
             }
 
-            return chunk;
-        }).thenCompose(chunk -> {
-            if (chunk == null) {
+            return locationChunkEntry;
+        }).thenCompose(locationChunkEntry -> {
+            if (locationChunkEntry == null) {
                 return null;
             }
+
+            RandomLocation randomLocation = locationChunkEntry.getKey();
+            Chunk chunk = locationChunkEntry.getValue();
 
             Block block = chunk.getWorld().getBlockAt(LocationUtil.toLocation(randomLocation));
             Location loc = block.getLocation().add(0.5, 2.0, 0.5);
@@ -137,11 +145,15 @@ public class Teleport {
             drawWarpParticles(player);
             player.setFallDistance(0.0F);
             player.setVelocity(NULL_VECTOR);
-            return PaperLib.teleportAsync(player, loc);
-        }).thenAccept(teleportSuccess -> {
-            if (teleportSuccess != Boolean.FALSE) {
+            return PaperLib.teleportAsync(player, loc).thenApply(result -> {
+                return Map.entry(randomLocation, result);
+            });
+        }).thenAccept(locationSuccessEntry -> {
+            if (locationSuccessEntry == null || locationSuccessEntry.getValue() != Boolean.TRUE) {
                 return;
             }
+
+            RandomLocation randomLocation = locationSuccessEntry.getKey();
 
             if (bukkitConfigHandler.getSectionTeleport().getDeathTimer() > 0) {
                 addToDeathTimer(player);
@@ -152,12 +164,65 @@ public class Teleport {
             }
             drawWarpParticles(player);
             MessageUtil.sendMessage(plugin, player, bukkitConfigHandler.getSectionMessage().getTeleport(randomLocation));
-        }).thenRun(() -> {
-            Bukkit.getScheduler().runTaskLater(plugin.getPlugin(), () -> {
-                WorldConfigSection worldConfigSection = plugin.getLocationFactory().getWorldConfigSection(property.getWorld());
-                plugin.getWorldQueue().get(property.getWorld()).generate(worldConfigSection, 1);
-            }, bukkitConfigHandler.getSectionQueue().getInitDelay());
+        }).thenRun(() -> forceQueuePopulation(plugin, property.getWorld()));
+    }
+
+    public static CompletableFuture<RandomLocation> calculateRandomLocation(RandomTeleport plugin, RandomWorld world,
+                                                                            boolean waitIfDepleted) {
+        final RandomLocation randomLocation = plugin.getWorldQueue().popLocation(world);
+        if (randomLocation == null) {
+            if (waitIfDepleted) {
+                final CompletableFuture<RandomLocation> future = new CompletableFuture<>();
+                final LocationQueue locationQueue = plugin.getQueue(world);
+                final QueueListener<RandomLocation> subscriber = new QueueListener<>() {
+                    @Override
+                    public void onAdd(RandomLocation element) {
+                        locationQueue.unsubscribe(this);
+                        if (future.isDone()) {
+                            return;
+                        }
+
+                        RandomLocation elem = locationQueue.poll();
+                        future.complete(elem);
+                    }
+
+                    @Override
+                    public void onRemove(RandomLocation element) {
+                        // No-op
+                    }
+                };
+                locationQueue.subscribe(subscriber);
+
+                return future;
+            } else {
+                return CompletableFuture.failedFuture(new QueueDepletedException());
+            }
+        }
+
+        return PaperLib.getChunkAtAsync(LocationUtil.toLocation(randomLocation)).thenCompose(chunk -> {
+            if (!checkLocationSafety(plugin, world, randomLocation)) {
+                // Try again
+                return calculateRandomLocation(plugin, world, waitIfDepleted);
+            }
+
+            return CompletableFuture.completedFuture(randomLocation);
+        }).thenCombine(forceQueuePopulation(plugin, world), (theRandomLocation, unused) -> {
+            return theRandomLocation;
         });
+    }
+
+    private static CompletableFuture<Void> forceQueuePopulation(RandomTeleport plugin, RandomWorld world) {
+        Bukkit.getScheduler().runTaskLater(plugin.getPlugin(), () -> {
+            WorldConfigSection worldConfigSection = plugin.getLocationFactory().getWorldConfigSection(world);
+            plugin.getWorldQueue().get(world).generate(worldConfigSection, 1);
+        }, plugin.getConfigHandler().getSectionQueue().getInitDelay());
+
+        return CompletableFuture.completedFuture(null);
+    }
+
+    private static boolean checkLocationSafety(RandomTeleport plugin, RandomWorld world, RandomLocation randomLocation) {
+        LocationSearcher baseLocationSearcher = LocationSearcherFactory.getLocationSearcher(world, plugin);
+        return baseLocationSearcher.isSafe(randomLocation);
     }
 }
 
